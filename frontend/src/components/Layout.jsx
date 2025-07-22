@@ -1,16 +1,17 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { 
-  Home, 
-  FileText, 
-  Award, 
-  Upload, 
-  Users, 
-  Clock, 
+import {
+  Home,
+  FileText,
+  Award,
+  Upload,
+  Users,
+  Clock,
   CheckCircle,
   LogOut,
-  GraduationCap
+  GraduationCap,
+  Plus
 } from 'lucide-react'
 
 const Layout = ({ children }) => {
@@ -26,6 +27,7 @@ const Layout = ({ children }) => {
 
   const teacherNavItems = [
     { path: '/dashboard', label: 'Dashboard', icon: Home },
+    { path: '/assign-assignment', label: 'Assign Assignment', icon: Plus },
     { path: '/review', label: 'Review Assignments', icon: FileText },
     { path: '/late-submissions', label: 'Late Submissions', icon: Clock },
     { path: '/grades', label: 'Assign Grades', icon: Award },
@@ -45,7 +47,7 @@ const Layout = ({ children }) => {
                 Assignment Review System
               </span>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               <div className="text-right">
                 <div className="text-sm font-medium text-gray-900">{user?.name}</div>
@@ -70,16 +72,15 @@ const Layout = ({ children }) => {
               {navItems.map((item) => {
                 const IconComponent = item.icon
                 const isActive = location.pathname === item.path
-                
+
                 return (
                   <li key={item.path}>
                     <Link
                       to={item.path}
-                      className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                        isActive
-                          ? 'bg-primary-50 text-primary-700 border-r-2 border-primary-600'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                      }`}
+                      className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${isActive
+                        ? 'bg-primary-50 text-primary-700 border-r-2 border-primary-600'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
                     >
                       <IconComponent className="h-5 w-5 mr-3" />
                       {item.label}

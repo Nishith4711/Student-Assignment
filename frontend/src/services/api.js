@@ -1,10 +1,13 @@
 import axios from 'axios'
 
-const API_BASE_URL = 'http://localhost:5000/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+
+console.log('API Base URL:', API_BASE_URL)
 
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 30000,
 })
 
 // Add token to requests
@@ -13,8 +16,21 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  console.log('API Request:', config.method?.toUpperCase(), config.url)
   return config
 })
+
+// Handle responses
+api.interceptors.response.use(
+  (response) => {
+    console.log('API Response:', response.status, response.data)
+    return response
+  },
+  (error) => {
+    console.error('API Error:', error.response?.status, error.response?.data || error.message)
+    return Promise.reject(error)
+  }
+)
 
 // Auth API
 export const authAPI = {
@@ -34,20 +50,42 @@ export const assignmentsAPI = {
 
 // Submissions API
 export const submissionsAPI = {
-  submit: (formData) => {
-    console.log('API: Submitting form data:', formData)
-    return api.post('/submissions', formData, {
-      headers: { 
-        'Content-Type': 'multipart/form-data'
-      },
-      timeout: 30000 // 30 second timeout for file uploads
-    })
+  submit: async (formData) => {
+    console.log('=== FRONTEND SUBMISSION START ===')
+
+    // Log form data contents
+    console.log('FormData contents:')
+    for (let [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`${key}: File - ${value.name} (${value.size} bytes, ${value.type})`)
+      } else {
+        console.log(`${key}: ${value}`)
+      }
+    }
+
+    try {
+      const response = await api.post('/submissions', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 60000,
+      })
+
+      console.log('=== SUBMISSION SUCCESS ===')
+      console.log('Response:', response.data)
+      return response
+
+    } catch (error) {
+      console.error('=== SUBMISSION ERROR ===')
+      console.error('Error details:', error.response?.data || error.message)
+      throw error
+    }
   },
   getAll: () => api.get('/submissions'),
   getLateSubmissions: () => api.get('/submissions/late'),
   getMySubmissions: () => api.get('/submissions/my-submissions'),
   updateStatus: (id, data) => api.put(`/submissions/${id}/status`, data),
-  download: (id) => api.get(`/submissions/${id}/download`, { 
+  download: (id) => api.get(`/submissions/${id}/download`, {
     responseType: 'blob',
     timeout: 30000
   }),

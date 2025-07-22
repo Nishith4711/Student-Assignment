@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Upload as UploadIcon, FileText, Calendar, Award, CheckCircle, AlertCircle } from 'lucide-react'
+import { Upload as UploadIcon, FileText, Calendar, Award, CheckCircle, AlertCircle, X } from 'lucide-react'
 import { assignmentsAPI, submissionsAPI } from '../../services/api'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import toast from 'react-hot-toast'
@@ -12,6 +12,7 @@ const Upload = () => {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
 
   useEffect(() => {
     fetchAssignments()
@@ -19,36 +20,52 @@ const Upload = () => {
 
   const fetchAssignments = async () => {
     try {
-      const response = await assignmentsAPI.getStudentAssignments()
-      // Filter assignments that haven't been submitted yet
-      const unsubmittedAssignments = response.data.filter(assignment => !assignment.submission)
-      setAssignments(unsubmittedAssignments)
+      console.log('Fetching assignments...')
+      const response = await assignmentsAPI.getAll()
+      console.log('Assignments response:', response.data)
+
+      if (response.data && Array.isArray(response.data)) {
+        setAssignments(response.data)
+        console.log('Set assignments:', response.data.length, 'assignments')
+      } else {
+        console.log('No assignments data or not an array')
+        setAssignments([])
+      }
     } catch (error) {
       console.error('Error fetching assignments:', error)
-      toast.error('Failed to load assignments')
+      toast.error('Failed to load assignments: ' + (error.response?.data?.message || error.message))
+      setAssignments([])
     } finally {
       setLoading(false)
     }
   }
 
+  const validateFile = (file) => {
+    console.log('Validating file:', file.name, file.size, file.type)
+
+    // Check file size (10MB limit)
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    if (file.size > maxSize) {
+      toast.error('File size must be less than 10MB')
+      return false
+    }
+
+    // Check file type
+    const allowedTypes = ['pdf', 'doc', 'docx', 'txt', 'zip', 'rar']
+    const fileExtension = file.name.split('.').pop()?.toLowerCase()
+
+    if (!fileExtension || !allowedTypes.includes(fileExtension)) {
+      toast.error('Invalid file type. Only PDF, DOC, DOCX, TXT, ZIP, and RAR files are allowed.')
+      return false
+    }
+
+    console.log('File validation passed')
+    return true
+  }
+
   const handleFileChange = (event) => {
     const file = event.target.files?.[0]
-    if (file) {
-      // Check file size (10MB limit)
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error('File size must be less than 10MB')
-        return
-      }
-      
-      // Check file type
-      const allowedTypes = ['pdf', 'doc', 'docx', 'txt', 'zip', 'rar']
-      const fileExtension = file.name.split('.').pop().toLowerCase()
-      
-      if (!allowedTypes.includes(fileExtension)) {
-        toast.error('Invalid file type. Only PDF, DOC, DOCX, TXT, ZIP, and RAR files are allowed.')
-        return
-      }
-      
+    if (file && validateFile(file)) {
       setSelectedFile(file)
       toast.success('File selected successfully!')
     }
@@ -57,22 +74,7 @@ const Upload = () => {
   const handleDrop = (e) => {
     e.preventDefault()
     const file = e.dataTransfer.files[0]
-    if (file) {
-      // Check file size (10MB limit)
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error('File size must be less than 10MB')
-        return
-      }
-      
-      // Check file type
-      const allowedTypes = ['pdf', 'doc', 'docx', 'txt', 'zip', 'rar']
-      const fileExtension = file.name.split('.').pop().toLowerCase()
-      
-      if (!allowedTypes.includes(fileExtension)) {
-        toast.error('Invalid file type. Only PDF, DOC, DOCX, TXT, ZIP, and RAR files are allowed.')
-        return
-      }
-      
+    if (file && validateFile(file)) {
       setSelectedFile(file)
       toast.success('File dropped successfully!')
     }
@@ -84,54 +86,78 @@ const Upload = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
+    console.log('=== FORM SUBMISSION START ===')
+    console.log('Selected file:', selectedFile)
+    console.log('Selected assignment:', selectedAssignment)
+    console.log('Comments:', comments)
+
+    // Validation
     if (!selectedFile) {
       toast.error('Please select a file to upload')
       return
     }
-    
+
     if (!selectedAssignment) {
       toast.error('Please select an assignment')
       return
     }
 
+    // Find the selected assignment
+    const assignment = assignments.find(a => a._id === selectedAssignment)
+    if (!assignment) {
+      toast.error('Selected assignment not found')
+      return
+    }
+
+    console.log('Assignment details:', assignment)
+
     setUploading(true)
+    setUploadProgress(0)
 
     try {
+      // Create FormData
       const formData = new FormData()
       formData.append('file', selectedFile)
       formData.append('assignmentId', selectedAssignment)
-      formData.append('comments', comments)
+      formData.append('comments', comments.trim())
 
-      console.log('Submitting assignment:', {
-        assignmentId: selectedAssignment,
-        fileName: selectedFile.name,
-        fileSize: selectedFile.size,
-        comments: comments
-      })
+      console.log('FormData created, submitting...')
 
+      // Submit the assignment
       const response = await submissionsAPI.submit(formData)
-      console.log('Submission response:', response.data)
-      
+
+      console.log('Submission successful:', response.data)
+
+      // Show success
       setSubmitted(true)
       toast.success('Assignment submitted successfully!')
-      
-      // Reset form after success
+
+      // Reset form after 3 seconds
       setTimeout(() => {
         setSubmitted(false)
         setSelectedFile(null)
         setSelectedAssignment('')
         setComments('')
-        fetchAssignments() // Refresh assignments list
+        setUploadProgress(0)
+        fetchAssignments() // Refresh assignments
       }, 3000)
-      
+
     } catch (error) {
-      console.error('Error submitting assignment:', error)
-      const errorMessage = error.response?.data?.message || 'Failed to submit assignment'
+      console.error('Submission error:', error)
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to submit assignment'
       toast.error(errorMessage)
     } finally {
       setUploading(false)
     }
+  }
+
+  const clearForm = () => {
+    setSelectedFile(null)
+    setSelectedAssignment('')
+    setComments('')
+    setUploadProgress(0)
+    toast.success('Form cleared')
   }
 
   const formatFileSize = (bytes) => {
@@ -156,7 +182,15 @@ const Upload = () => {
         <div className="card bg-green-50 border-green-200 text-center">
           <CheckCircle className="mx-auto h-16 w-16 text-green-600 mb-4" />
           <h2 className="text-2xl font-bold text-green-900 mb-2">Assignment Submitted Successfully!</h2>
-          <p className="text-green-700">Your assignment has been submitted and is now under review.</p>
+          <p className="text-green-700 mb-4">Your assignment has been submitted and is now under review.</p>
+          <div className="bg-white p-4 rounded-lg border border-green-200">
+            <h3 className="font-semibold text-gray-900 mb-2">Submission Details:</h3>
+            <div className="text-left space-y-1 text-sm text-gray-700">
+              <p><span className="font-medium">File:</span> {selectedFile?.name}</p>
+              <p><span className="font-medium">Size:</span> {selectedFile ? formatFileSize(selectedFile.size) : 'N/A'}</p>
+              <p><span className="font-medium">Assignment:</span> {assignments.find(a => a._id === selectedAssignment)?.title}</p>
+            </div>
+          </div>
           <div className="mt-4">
             <div className="animate-pulse text-green-600">Redirecting in 3 seconds...</div>
           </div>
@@ -176,7 +210,7 @@ const Upload = () => {
         <div className="card text-center">
           <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No assignments available</h3>
-          <p className="text-gray-600">All assignments have been submitted or there are no active assignments.</p>
+          <p className="text-gray-600">There are no assignments available for submission at this time.</p>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -189,11 +223,10 @@ const Upload = () => {
                 return (
                   <label
                     key={assignment._id}
-                    className={`block p-4 border rounded-lg cursor-pointer transition-all duration-200 ${
-                      selectedAssignment === assignment._id
-                        ? 'border-primary-500 bg-primary-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    } ${overdue ? 'border-l-4 border-l-red-500' : ''}`}
+                    className={`block p-4 border rounded-lg cursor-pointer transition-all duration-200 ${selectedAssignment === assignment._id
+                      ? 'border-primary-500 bg-primary-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                      } ${overdue ? 'border-l-4 border-l-red-500' : ''}`}
                   >
                     <input
                       type="radio"
@@ -284,6 +317,15 @@ const Upload = () => {
                   </button>
                 </div>
               )}
+
+              {uploading && uploadProgress > 0 && (
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -303,14 +345,11 @@ const Upload = () => {
           <div className="flex justify-end space-x-4">
             <button
               type="button"
-              onClick={() => {
-                setSelectedFile(null)
-                setSelectedAssignment('')
-                setComments('')
-                toast.success('Form cleared')
-              }}
+              onClick={clearForm}
               className="btn-secondary"
+              disabled={uploading}
             >
+              <X className="h-4 w-4 mr-2" />
               Clear Form
             </button>
             <button
@@ -321,7 +360,7 @@ const Upload = () => {
               {uploading ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                  Submitting...
+                  Submitting... {uploadProgress > 0 && `${uploadProgress}%`}
                 </>
               ) : (
                 <>

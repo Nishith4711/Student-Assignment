@@ -6,29 +6,45 @@ const { auth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get all assignments
+// Get all assignments (for both students and teachers)
 router.get('/', auth, async (req, res) => {
   try {
+    console.log('=== GET ASSIGNMENTS REQUEST ===');
+    console.log('User:', req.user.name, 'Role:', req.user.role);
+    
     const assignments = await Assignment.find({ isActive: true })
       .populate('createdBy', 'name email')
       .sort({ createdAt: -1 });
     
+    console.log('Found assignments:', assignments.length);
+    assignments.forEach(a => console.log(`- ${a.title} (ID: ${a._id})`));
+    
     res.json(assignments);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error fetching assignments:', error);
+    res.status(500).json({ 
+      message: 'Server error',
+      error: error.message 
+    });
   }
 });
 
 // Get assignments for student (with submission status)
 router.get('/student', auth, requireRole(['student']), async (req, res) => {
   try {
+    console.log('=== GET STUDENT ASSIGNMENTS REQUEST ===');
+    console.log('Student:', req.user.name, 'ID:', req.user._id);
+    
     const assignments = await Assignment.find({ isActive: true })
       .populate('createdBy', 'name email')
       .sort({ dueDate: 1 });
 
+    console.log('Found assignments for student:', assignments.length);
+
     // Get submissions for this student
     const submissions = await Submission.find({ student: req.user._id });
+    console.log('Found submissions for student:', submissions.length);
+    
     const submissionMap = {};
     submissions.forEach(sub => {
       submissionMap[sub.assignment.toString()] = sub;
@@ -45,10 +61,15 @@ router.get('/student', auth, requireRole(['student']), async (req, res) => {
       };
     });
 
+    console.log('Assignments with status:', assignmentsWithStatus.length);
+
     res.json(assignmentsWithStatus);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error fetching student assignments:', error);
+    res.status(500).json({ 
+      message: 'Server error',
+      error: error.message 
+    });
   }
 });
 
@@ -61,9 +82,16 @@ router.post('/', auth, requireRole(['teacher']), [
   body('dueDate').isISO8601().withMessage('Valid due date is required')
 ], async (req, res) => {
   try {
+    console.log('=== CREATE ASSIGNMENT REQUEST ===');
+    console.log('Teacher:', req.user.name);
+    console.log('Assignment data:', req.body);
+    
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      console.log('Validation errors:', errors.array());
+      return res.status(400).json({ 
+        errors: errors.array() 
+      });
     }
 
     const assignment = new Assignment({
@@ -74,10 +102,15 @@ router.post('/', auth, requireRole(['teacher']), [
     await assignment.save();
     await assignment.populate('createdBy', 'name email');
 
+    console.log('Assignment created successfully:', assignment._id);
+
     res.status(201).json(assignment);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error creating assignment:', error);
+    res.status(500).json({ 
+      message: 'Server error',
+      error: error.message 
+    });
   }
 });
 
@@ -87,11 +120,15 @@ router.put('/:id', auth, requireRole(['teacher']), async (req, res) => {
     const assignment = await Assignment.findById(req.params.id);
     
     if (!assignment) {
-      return res.status(404).json({ message: 'Assignment not found' });
+      return res.status(404).json({ 
+        message: 'Assignment not found' 
+      });
     }
 
     if (assignment.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized' });
+      return res.status(403).json({ 
+        message: 'Not authorized' 
+      });
     }
 
     const updatedAssignment = await Assignment.findByIdAndUpdate(
@@ -102,8 +139,11 @@ router.put('/:id', auth, requireRole(['teacher']), async (req, res) => {
 
     res.json(updatedAssignment);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error updating assignment:', error);
+    res.status(500).json({ 
+      message: 'Server error',
+      error: error.message 
+    });
   }
 });
 
@@ -113,20 +153,29 @@ router.delete('/:id', auth, requireRole(['teacher']), async (req, res) => {
     const assignment = await Assignment.findById(req.params.id);
     
     if (!assignment) {
-      return res.status(404).json({ message: 'Assignment not found' });
+      return res.status(404).json({ 
+        message: 'Assignment not found' 
+      });
     }
 
     if (assignment.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized' });
+      return res.status(403).json({ 
+        message: 'Not authorized' 
+      });
     }
 
     assignment.isActive = false;
     await assignment.save();
 
-    res.json({ message: 'Assignment deleted successfully' });
+    res.json({ 
+      message: 'Assignment deleted successfully' 
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error deleting assignment:', error);
+    res.status(500).json({ 
+      message: 'Server error',
+      error: error.message 
+    });
   }
 });
 

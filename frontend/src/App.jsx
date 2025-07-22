@@ -8,6 +8,7 @@ import StudentAssignments from './pages/student/Assignments'
 import StudentGrades from './pages/student/Grades'
 import StudentUpload from './pages/student/Upload'
 import TeacherDashboard from './pages/teacher/Dashboard'
+import AssignAssignment from './pages/teacher/AssignAssignment'
 import TeacherReview from './pages/teacher/Review'
 import TeacherLateSubmissions from './pages/teacher/LateSubmissions'
 import TeacherGrades from './pages/teacher/Grades'
@@ -45,6 +46,7 @@ function App() {
         ) : (
           <>
             <Route path="/dashboard" element={<TeacherDashboard />} />
+            <Route path="/assign-assignment" element={<AssignAssignment />} />
             <Route path="/review" element={<TeacherReview />} />
             <Route path="/late-submissions" element={<TeacherLateSubmissions />} />
             <Route path="/grades" element={<TeacherGrades />} />
