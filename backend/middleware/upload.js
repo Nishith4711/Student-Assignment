@@ -1,21 +1,21 @@
-// middleware/upload.js
+// backend/middleware/upload.js
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
-const cloudinary = require('./cloudinary'); // Correct path for config
+const cloudinary = require('../config/cloudinary'); // Ensure this exists
 
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'student-assignments', // Folder in Cloudinary
+    folder: 'student-assignments',
     allowed_formats: ['pdf', 'doc', 'docx', 'txt', 'zip', 'rar'],
-    resource_type: 'raw' // Use 'raw' for non-image files
+    resource_type: 'raw'
   }
 });
 
 const upload = multer({
-  storage: storage,
+  storage,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB
+    fileSize: 10 * 1024 * 1024 // 10 MB
   }
 });
 

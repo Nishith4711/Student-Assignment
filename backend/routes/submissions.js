@@ -2,9 +2,7 @@ const express = require('express');
 const Submission = require('../models/Submission');
 const Assignment = require('../models/Assignment');
 const { auth, requireRole } = require('../middleware/auth');
-const upload = require('../config/multer');
-const path = require('path');
-
+const upload = require('../middleware/upload'); // ✅ now using Cloudinary
 const router = express.Router();
 
 // Submit assignment (student only)
@@ -17,69 +15,38 @@ router.post('/', auth, requireRole(['student']), upload.single('file'), async (r
       originalname: req.file.originalname,
       size: req.file.size,
       mimetype: req.file.mimetype,
-      path: req.file.path
+      cloudinaryUrl: req.file.path
     } : 'No file');
 
     const { assignmentId, comments } = req.body;
 
-    // Validate required fields
     if (!assignmentId) {
-      console.log('ERROR: No assignment ID provided');
-      return res.status(400).json({
-        message: 'Assignment ID is required'
-      });
+      return res.status(400).json({ message: 'Assignment ID is required' });
     }
 
     if (!req.file) {
-      console.log('ERROR: No file uploaded');
-      return res.status(400).json({
-        message: 'File is required'
-      });
+      return res.status(400).json({ message: 'File is required' });
     }
 
-    console.log('Looking for assignment with ID:', assignmentId);
-
-    // Check if assignment exists
     const assignment = await Assignment.findById(assignmentId);
     if (!assignment) {
-      console.log('ERROR: Assignment not found with ID:', assignmentId);
-      return res.status(404).json({
-        message: 'Assignment not found'
-      });
+      return res.status(404).json({ message: 'Assignment not found' });
     }
 
-    console.log('Assignment found:', assignment.title);
+    // Removed the check for existingSubmission to allow multiple submissions
 
-    // Check if student already submitted
-    const existingSubmission = await Submission.findOne({
-      assignment: assignmentId,
-      student: req.user._id
-    });
-
-    if (existingSubmission) {
-      console.log('ERROR: Student already submitted this assignment');
-      return res.status(400).json({
-        message: 'Assignment already submitted'
-      });
-    }
-
-    console.log('Creating new submission...');
-
-    // Create submission
     const submission = new Submission({
       assignment: assignmentId,
       student: req.user._id,
       fileName: req.file.originalname,
-      filePath: req.file.path,
+      filePath: req.file.path, // ✅ this will be Cloudinary URL
       fileSize: req.file.size,
       comments: comments || '',
       submittedAt: new Date()
     });
 
     await submission.save();
-    console.log('Submission saved successfully with ID:', submission._id);
 
-    // Populate the submission
     await submission.populate([
       { path: 'assignment', select: 'title subject maxPoints dueDate' },
       { path: 'student', select: 'name email studentId' }
@@ -93,10 +60,7 @@ router.post('/', auth, requireRole(['student']), upload.single('file'), async (r
 
   } catch (error) {
     console.error('=== SUBMISSION ERROR ===');
-    console.error('Error details:', error);
-    res.status(500).json({
-      message: 'Server error: ' + error.message
-    });
+    res.status(500).json({ message: 'Server error: ' + error.message });
   }
 });
 
@@ -111,9 +75,7 @@ router.get('/', auth, requireRole(['teacher']), async (req, res) => {
     res.json(submissions);
   } catch (error) {
     console.error('Error fetching submissions:', error);
-    res.status(500).json({
-      message: 'Server error'
-    });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -128,9 +90,7 @@ router.get('/late', auth, requireRole(['teacher']), async (req, res) => {
     res.json(lateSubmissions);
   } catch (error) {
     console.error('Error fetching late submissions:', error);
-    res.status(500).json({
-      message: 'Server error'
-    });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -144,9 +104,7 @@ router.get('/my-submissions', auth, requireRole(['student']), async (req, res) =
     res.json(submissions);
   } catch (error) {
     console.error('Error fetching my submissions:', error);
-    res.status(500).json({
-      message: 'Server error'
-    });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -165,44 +123,38 @@ router.put('/:id/status', auth, requireRole(['teacher']), async (req, res) => {
     ]);
 
     if (!submission) {
-      return res.status(404).json({
-        message: 'Submission not found'
-      });
+      return res.status(404).json({ message: 'Submission not found' });
     }
 
     res.json(submission);
   } catch (error) {
     console.error('Error updating submission status:', error);
-    res.status(500).json({
-      message: 'Server error'
-    });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Download submission file
+// ⚠️ Download submission file – Now returns Cloudinary URL
 router.get('/:id/download', auth, async (req, res) => {
   try {
     const submission = await Submission.findById(req.params.id);
 
     if (!submission) {
-      return res.status(404).json({
-        message: 'Submission not found'
-      });
+      return res.status(404).json({ message: 'Submission not found' });
     }
 
-    // Check authorization
     if (req.user.role === 'student' && submission.student.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        message: 'Not authorized'
-      });
+      return res.status(403).json({ message: 'Not authorized' });
     }
 
-    res.download(submission.filePath, submission.fileName);
-  } catch (error) {
-    console.error('Error downloading file:', error);
-    res.status(500).json({
-      message: 'Server error'
+    // ✅ Cloudinary filePath is a URL
+    res.json({
+      message: 'File URL retrieved successfully',
+      fileUrl: submission.filePath
     });
+
+  } catch (error) {
+    console.error('Error retrieving file:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
